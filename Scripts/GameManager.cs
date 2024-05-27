@@ -1,68 +1,152 @@
+using System;
+using System.Collections;
 using System.Collections.Generic;
-using Unity.Mathematics;
+using TMPro;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class GameManager : MonoBehaviour
 {
-    public float spawnInterval = 2f;
-    public Transform spawnPoint;
-    public float chunkWidth = 10f;
-    public int chunkExpand = 1;
+    // UI elements for displaying timer and high score
+    public TextMeshProUGUI timerText;
+    public TextMeshProUGUI highScoreText;
 
-    private GameObject[] carPrefabs;
-    private GameObject[] chunkPrefabs;
-    private float nextSpawnTime;
+    // Player and checkpoint indicator game objects
+    public GameObject player;
+    public GameObject checkpointIndicator;
 
-    [HideInInspector]
-    public List<GameObject> cars = new List<GameObject>();
+    // Variables to track game start time and states
+    private float startTime;
 
-    private Camera mainCamera = null;
+    private bool gameStarted;
+    private bool gameFinished;
 
-    Dictionary<int, GameObject> chunks = new Dictionary<int, GameObject>();
+    // Flag to reset high score for debugging or game resets
+    public bool resetHighScore = false;
 
-    void LoadChunk(int index)
+    // Pause menu related variables
+    public GameObject pauseMenu;
+    private bool isPaused = false;
+
+    // High score holder name
+    private string highScoreHolder;
+
+    // Converts a float time value to a formatted string (mm:ss:ff)
+    string GetScore(float time)
     {
-        if (!chunks.ContainsKey(index))
-        {
-            GameObject chunk = chunkPrefabs[UnityEngine.Random.Range(0, chunkPrefabs.Length)];
+        TimeSpan timeElapsed = TimeSpan.FromSeconds(time);
 
-            chunks.Add(index, Instantiate(chunk, new Vector3(index * chunkWidth, 0, 0), Quaternion.identity));
+        string formattedTime = string.Format(
+            "{0:00}:{1:00}:{2:00}",
+            timeElapsed.Minutes,
+            timeElapsed.Seconds,
+            timeElapsed.Milliseconds / 10
+        );
+
+        return formattedTime;
+    }
+
+    // Starts the game and initializes the timer
+    public void StartGame()
+    {
+        if (!gameStarted)
+        {
+            startTime = Time.time;
+            gameStarted = true;
         }
     }
 
+    // Finishes the game, calculates the score, and saves it
+    public void FinishGame()
+    {
+        if (gameStarted && !gameFinished)
+        {
+            gameFinished = true;
+
+            float currentScore = Time.time - startTime;
+
+            timerText.text = GetScore(currentScore);
+
+            PlayerPrefs.SetFloat("Score", currentScore);
+            PlayerPrefs.Save();
+
+            SceneManager.LoadScene("FinishScreen");
+        }
+    }
+
+    // Initializes high score from PlayerPrefs and resets if flag is set
     void Start()
     {
-        mainCamera = GameObject.FindGameObjectWithTag("MainCamera").GetComponent<Camera>();
+        highScoreHolder = PlayerPrefs.GetString("HighScoreHolder");
 
-        carPrefabs = Resources.LoadAll<GameObject>("Cars");
-        chunkPrefabs = Resources.LoadAll<GameObject>("Chunks");
-        
-        if (carPrefabs.Length == 0)
+        if (resetHighScore)
         {
-            Debug.LogWarning("No Car Prefabs");
+            PlayerPrefs.SetFloat("HighScore", 0);
+            PlayerPrefs.Save();
+        }
+
+        float highScore = PlayerPrefs.GetFloat("HighScore");
+
+        if (highScoreText != null && highScoreHolder != null && highScore != 0f)
+        {
+            highScoreText.text = "High Score: " + GetScore(highScore) + " (" + highScoreHolder + ")";
         }
     }
 
+    // Updates timer, checks for checkpoints, and handles pause menu input
     void Update()
     {
-        if (Time.time >= nextSpawnTime && carPrefabs.Length > 0)
+        if (gameStarted && !gameFinished)
         {
-            SpawnCar();
-            nextSpawnTime = Time.time + spawnInterval;
+            timerText.text = GetScore(Time.time - startTime);
         }
 
-        int chunkPosition = (int)Mathf.Floor((mainCamera.transform.position.x/chunkWidth) + 0.5f);
+        PlayerController pc = player.GetComponent<PlayerController>();
 
-        for (int i = 0; i < 1 + (chunkExpand * 2); i++)
+        if (pc.checkpoint != null)
         {
-            LoadChunk(chunkPosition + i - chunkExpand);
+            Vector3 targetPosition = new Vector3(pc.checkpoint.transform.position.x, 5, pc.checkpoint.transform.position.z);
+
+            Vector3 smoothedPosition = Vector3.Lerp(checkpointIndicator.transform.position, targetPosition, 10 * Time.deltaTime);
+            checkpointIndicator.transform.position = smoothedPosition;
+        }
+
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            if (isPaused)
+            {
+                Resume();
+            }
+            else
+            {
+                Pause();
+            }
         }
     }
 
-    void SpawnCar()
+    // Resumes the game from pause
+    public void Resume()
     {
-        GameObject car = carPrefabs[UnityEngine.Random.Range(0, carPrefabs.Length)];
+        pauseMenu.SetActive(false);
+        Time.timeScale = 1f;
+        isPaused = false;
+    }
 
-        cars.Add(Instantiate(car, spawnPoint.position, spawnPoint.rotation));
+    // Pauses the game and shows pause menu
+    public void Pause()
+    {
+        pauseMenu.SetActive(true);
+        Time.timeScale = 0f;
+        isPaused = true;
+    }
+
+    // Quits the game application
+    public void QuitGame()
+    {
+        #if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+        #else
+            Application.Quit();
+        #endif
     }
 }
