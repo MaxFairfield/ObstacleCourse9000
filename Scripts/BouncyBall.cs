@@ -15,6 +15,7 @@ public class BouncyBall : MonoBehaviour
         audioSource = GetComponent<AudioSource>();
     }
 
+    //Coroutine to make the ball play through bounce animation
     IEnumerator Bounce()
     {
         debounce = true;
@@ -25,6 +26,7 @@ public class BouncyBall : MonoBehaviour
         Vector3 originalScale = transform.localScale;
         Vector3 originalPosition = transform.position;
 
+        // Squish (Low and Flat)
         yield return StartCoroutine(
             AnimateBounce(
                 originalScale,
@@ -35,6 +37,7 @@ public class BouncyBall : MonoBehaviour
             )
         );
 
+        // Expand (Tall and Thin)
         yield return StartCoroutine(
             AnimateBounce(
                 transform.localScale,
@@ -45,6 +48,7 @@ public class BouncyBall : MonoBehaviour
             )
         );
 
+        // Return to normal using original scale and position
         yield return StartCoroutine(
             AnimateBounce(
                 transform.localScale,
@@ -61,6 +65,7 @@ public class BouncyBall : MonoBehaviour
         debounce = false;
     }
 
+    // Coroutine to animate the bounce of the ball according to params, independently from main thread
     IEnumerator AnimateBounce(Vector3 originalScale, Vector3 originalPosition, Vector3 newSize, Vector3 newPosition, float duration)
     {
         float elapsedTime = 0f;
